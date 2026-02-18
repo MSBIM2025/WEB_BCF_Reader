@@ -1,6 +1,9 @@
 # BCF Reader
 
 > Lecteur et générateur de rapports BCF — 100% navigateur, aucune donnée transmise.
+>
+> <img width="1917" height="1060" alt="image" src="https://github.com/user-attachments/assets/9d139e72-c16d-4430-86f4-72e6cc0394af" />
+
 
 ![BCF Reader](https://img.shields.io/badge/BCF-2.1-f97316?style=flat-square)
 ![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-ready-22c55e?style=flat-square)
