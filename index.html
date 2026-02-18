@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BCF Reader</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0f14;
+    --surface: #14171f;
+    --surface2: #1c2030;
+    --border: #252a3a;
+    --accent: #f97316;
+    --accent2: #fb923c;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --error: #ef4444;
+    --warning: #eab308;
+    --info: #3b82f6;
+    --unknown: #6b7280;
+    --success: #22c55e;
+  }
+
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    font-size: 0.875rem;
+    letter-spacing: -0.01em;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(13,15,20,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .logo {
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    white-space: nowrap;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .logo span { color: var(--text); }
+
+  .header-divider {
+    width: 1px;
+    height: 24px;
+    background: var(--border);
+  }
+
+  #statsBar {
+    display: flex;
+    gap: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    align-items: center;
+  }
+
+  .privacy-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 10px;
+    border: 1px solid rgba(34,197,94,0.2);
+    border-radius: 10px;
+    background: rgba(34,197,94,0.06);
+    font-size: 0.62rem;
+    color: #22c55e;
+    letter-spacing: 0.03em;
+  }
+
+  .stat-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .stat-pill b { color: var(--text); font-weight: 600; }
+
+  .header-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* ── DROP ZONE ── */
+  #dropZone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 60px);
+    gap: 24px;
+    transition: all 0.3s ease;
+  }
+
+  #dropZone.hidden { display: none; }
+
+  .drop-ring {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    border: 2px dashed var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: all 0.3s ease;
+  }
+
+  #dropZone.dragover .drop-ring {
+    border-color: var(--accent);
+    box-shadow: 0 0 60px rgba(249,115,22,0.2);
+  }
+
+  .drop-icon {
+    font-size: 3rem;
+    opacity: 0.5;
+    transition: opacity 0.3s;
+  }
+
+  #dropZone.dragover .drop-icon { opacity: 1; }
+
+  .drop-label {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
+  .drop-label strong {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .btn-upload {
+    padding: 8px 24px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 600;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-upload:hover { background: var(--accent2); transform: translateY(-1px); }
+
+  #fileInput { display: none; }
+
+  /* ── TOOLBAR ── */
+  #toolbar {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 28px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  #toolbar.visible { display: flex; }
+
+  .search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 180px;
+    max-width: 300px;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 0.85rem;
+    pointer-events: none;
+  }
+
+  #searchInput {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px 8px 34px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  #searchInput:focus { border-color: var(--accent); }
+  #searchInput::placeholder { color: var(--muted); }
+
+  .filter-group {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .filter-btn {
+    padding: 5px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .filter-btn .count {
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 0 5px;
+    font-size: 0.65rem;
+    color: var(--muted);
+    min-width: 18px;
+    text-align: center;
+    transition: all 0.2s;
+  }
+
+  .filter-btn.active { color: #fff; border-color: transparent; }
+  .filter-btn.active .count { background: rgba(255,255,255,0.2); color: #fff; }
+
+  .filter-btn[data-status="all"].active { background: var(--accent); }
+  .filter-btn[data-status="Error"].active { background: var(--error); }
+  .filter-btn[data-status="Warning"].active { background: var(--warning); color: #000; }
+  .filter-btn[data-status="Warning"].active .count { color: #000; background: rgba(0,0,0,0.2); }
+  .filter-btn[data-status="Info"].active { background: var(--info); }
+  .filter-btn[data-status="Unknown"].active { background: var(--unknown); }
+
+  .sort-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 12px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    outline: none;
+    cursor: pointer;
+    margin-left: auto;
+  }
+
+  /* ── MAIN LAYOUT ── */
+  #main {
+    display: none;
+    height: calc(100vh - 52px - 49px);
+  }
+
+  #main.visible { display: flex; }
+
+  /* ── LEFT PANEL ── */
+  #listPanel {
+    width: 320px;
+    min-width: 260px;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #listPanel::-webkit-scrollbar { width: 4px; }
+  #listPanel::-webkit-scrollbar-track { background: transparent; }
+  #listPanel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .topic-card {
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+  }
+
+  .topic-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: transparent;
+    transition: background 0.15s;
+  }
+
+  .topic-card:hover { background: var(--surface); }
+  .topic-card.active { background: var(--surface2); }
+  .topic-card.active::before { background: var(--accent); }
+
+  .card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 5px;
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-top: 4px;
+    flex-shrink: 0;
+  }
+
+  .status-dot.Error { background: var(--error); box-shadow: 0 0 5px rgba(239,68,68,0.6); }
+  .status-dot.Warning { background: var(--warning); box-shadow: 0 0 5px rgba(234,179,8,0.6); }
+  .status-dot.Info { background: var(--info); box-shadow: 0 0 5px rgba(59,130,246,0.6); }
+  .status-dot.Unknown { background: var(--unknown); }
+
+  .card-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    line-height: 1.35;
+    flex: 1;
+    letter-spacing: -0.01em;
+  }
+
+  .card-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+
+  .card-guid {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-bottom: 5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0.6;
+  }
+
+  .badge {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .badge.Error { background: rgba(239,68,68,0.15); color: var(--error); border: 1px solid rgba(239,68,68,0.3); }
+  .badge.Warning { background: rgba(234,179,8,0.15); color: var(--warning); border: 1px solid rgba(234,179,8,0.3); }
+  .badge.Info { background: rgba(59,130,246,0.15); color: var(--info); border: 1px solid rgba(59,130,246,0.3); }
+  .badge.Unknown { background: rgba(107,114,128,0.15); color: var(--muted); border: 1px solid rgba(107,114,128,0.3); }
+
+  /* ── DETAIL PANEL ── */
+  #detailPanel {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #detailPanel::-webkit-scrollbar { width: 4px; }
+  #detailPanel::-webkit-scrollbar-track { background: transparent; }
+  #detailPanel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .empty-detail {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    gap: 12px;
+    font-size: 0.85rem;
+  }
+
+  .empty-icon { font-size: 2.5rem; opacity: 0.3; }
+
+  .detail-hero {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .detail-status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .detail-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+  }
+
+  .detail-guid {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    background: var(--surface2);
+    padding: 3px 8px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+
+  .detail-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+
+  .detail-section {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .detail-section.full { grid-column: 1 / -1; }
+
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+
+  /* ── SNAPSHOT ── */
+  .snapshot-wrap {
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    max-width: 25%;
+    background: var(--surface2);
+    position: relative;
+  }
+
+  .snapshot-wrap img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  /* ── COMMENTS ── */
+  .comment-item {
+    display: flex;
+    gap: 11px;
+    margin-bottom: 12px;
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  .comment-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: var(--accent);
+    flex-shrink: 0;
+    text-transform: uppercase;
+  }
+
+  .comment-content { flex: 1; }
+
+  .comment-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+    flex-wrap: wrap;
+  }
+
+  .comment-author {
+    font-weight: 600;
+    font-size: 0.78rem;
+    letter-spacing: -0.01em;
+  }
+
+  .comment-date {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--muted);
+  }
+
+  .comment-text {
+    font-size: 0.8rem;
+    line-height: 1.55;
+    color: var(--text);
+    background: var(--surface2);
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  .verbal-status {
+    margin-top: 5px;
+    font-size: 0.7rem;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  /* ── FILES HEADER ── */
+  .file-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--surface2);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    margin-bottom: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+  }
+
+  .file-icon { color: var(--accent); font-size: 0.9rem; }
+  .file-name { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-date { color: var(--muted); font-size: 0.65rem; }
+
+  /* ── EMPTY LIST ── */
+  .no-results {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+
+  /* ── NEW FILE BTN ── */
+  .btn-ghost {
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    border-radius: 6px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.73rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── SCROLLBAR ── */
+  * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+
+  /* ── HIGHLIGHT ── */
+  mark {
+    background: rgba(249,115,22,0.3);
+    color: var(--accent2);
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+
+  /* ── REPORT BUTTON ── */
+  .btn-report {
+    padding: 6px 16px;
+    background: linear-gradient(135deg, #f97316, #fb923c);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.73rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    box-shadow: 0 2px 12px rgba(249,115,22,0.3);
+  }
+  .btn-report:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(249,115,22,0.45); }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0,0,0,0.7);
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(6px);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 520px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    transform: translateY(16px) scale(0.97);
+    transition: transform 0.25s;
+  }
+  .modal-overlay.open .modal { transform: translateY(0) scale(1); }
+
+  .modal-header {
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-title { font-size: 0.92rem; font-weight: 700; letter-spacing: -0.01em; }
+  .modal-close {
+    background: none; border: none; color: var(--muted);
+    font-size: 1rem; cursor: pointer; padding: 4px 8px;
+    border-radius: 4px; transition: color 0.15s;
+  }
+  .modal-close:hover { color: var(--text); }
+
+  .modal-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--accent);
+  }
+  .form-input, .form-select, .form-textarea {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 7px 10px;
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.78rem;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
+  .form-input::placeholder, .form-textarea::placeholder { color: var(--muted); }
+  .form-textarea { resize: vertical; min-height: 60px; }
+
+  .form-sep {
+    border: none; border-top: 1px solid var(--border); margin: 2px 0;
+  }
+
+  .modal-footer {
+    padding: 14px 24px 20px;
+    display: flex; gap: 8px; justify-content: flex-end;
+  }
+
+  .btn-generate {
+    padding: 8px 24px;
+    background: linear-gradient(135deg, #f97316, #fb923c);
+    border: none; border-radius: 6px;
+    color: #fff; font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 600; font-size: 0.78rem;
+    cursor: pointer; transition: all 0.2s;
+    box-shadow: 0 2px 12px rgba(249,115,22,0.3);
+  }
+  .btn-generate:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(249,115,22,0.4); }
+
+  .scope-options { display: flex; gap: 8px; }
+  .scope-btn {
+    flex: 1; padding: 7px 10px; border-radius: 4px;
+    border: 1px solid var(--border); background: transparent;
+    color: var(--muted); font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.75rem; font-weight: 500; cursor: pointer;
+    transition: all 0.2s; text-align: center;
+  }
+  .scope-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(249,115,22,0.08); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">BCF<span>·</span>Reader</div>
+  <div class="header-divider"></div>
+  <div id="statsBar" style="display:none">
+    <div class="stat-pill">Topics: <b id="statTopics">0</b></div>
+    <div class="stat-pill">Commentaires: <b id="statComments">0</b></div>
+    <div class="stat-pill">Erreurs: <b id="statErrors" style="color:var(--error)">0</b></div>
+    <div class="stat-pill">Warnings: <b id="statWarnings" style="color:var(--warning)">0</b></div>
+    <div class="privacy-pill">🔒 local only</div>
+  </div>
+  <div class="header-actions">
+    <button class="btn-report" id="btnReport" style="display:none" onclick="openReportModal()">
+      ⬇ Exporter rapport
+    </button>
+    <button class="btn-ghost" id="btnNewFile" style="display:none" onclick="resetApp()">
+      ↩ Nouveau fichier
+    </button>
+  </div>
+</header>
+
+<!-- DROP ZONE -->
+<div id="dropZone">
+  <div class="drop-ring">
+    <div class="drop-icon">📦</div>
+  </div>
+  <div class="drop-label">
+    <strong>Glissez un fichier BCF ici</strong>
+    Formats acceptés : .bcf, .bcfzip
+  </div>
+  <button class="btn-upload" onclick="document.getElementById('fileInput').click()">
+    Parcourir…
+  </button>
+  <input type="file" id="fileInput" accept=".bcf,.bcfzip">
+  <div style="display:flex;align-items:center;gap:8px;padding:8px 16px;border:1px solid rgba(34,197,94,0.25);border-radius:20px;background:rgba(34,197,94,0.06);">
+    <span style="color:#22c55e;font-size:0.75rem;">🔒</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:0.68rem;color:#64748b;">Traitement <b style="color:#22c55e;">100% local</b> — votre fichier ne quitte jamais votre navigateur</span>
+  </div>
+</div>
+
+<!-- TOOLBAR -->
+<div id="toolbar">
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="searchInput" placeholder="Rechercher titre, auteur, commentaire…">
+  </div>
+  <div class="filter-group">
+    <button class="filter-btn active" data-status="all">Tous <span class="count" id="cnt-all">0</span></button>
+    <button class="filter-btn" data-status="Error">⬤ Error <span class="count" id="cnt-Error">0</span></button>
+    <button class="filter-btn" data-status="Warning">⬤ Warning <span class="count" id="cnt-Warning">0</span></button>
+    <button class="filter-btn" data-status="Info">⬤ Info <span class="count" id="cnt-Info">0</span></button>
+    <button class="filter-btn" data-status="Unknown">⬤ Unknown <span class="count" id="cnt-Unknown">0</span></button>
+  </div>
+  <select class="sort-select" id="sortSelect">
+    <option value="title">Trier : Titre A→Z</option>
+    <option value="title-desc">Trier : Titre Z→A</option>
+    <option value="comments-desc">Trier : + commentaires</option>
+    <option value="comments-asc">Trier : - commentaires</option>
+    <option value="date-desc">Trier : Date récente</option>
+    <option value="date-asc">Trier : Date ancienne</option>
+  </select>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <div id="listPanel"></div>
+  <div id="detailPanel">
+    <div class="empty-detail">
+      <div class="empty-icon">👈</div>
+      Sélectionnez un topic pour afficher les détails
+    </div>
+  </div>
+</div>
+
+<!-- REPORT MODAL -->
+<div class="modal-overlay" id="reportModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">⬇ Générer le rapport BCF</div>
+      <button class="modal-close" onclick="closeReportModal()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="form-group">
+        <label class="form-label">Nom du projet</label>
+        <input class="form-input" id="rProjet" placeholder="ex: Bâtiment A — Phase DCE" />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Émetteur / Société</label>
+          <input class="form-input" id="rEmetteur" placeholder="ex: BMS Project" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Numéro de rapport</label>
+          <input class="form-input" id="rNumero" placeholder="ex: BCF-2025-001" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Indice / Révision</label>
+          <input class="form-input" id="rIndice" placeholder="ex: A" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date du rapport</label>
+          <input class="form-input" type="date" id="rDate" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Objet / Description</label>
+        <textarea class="form-textarea" id="rObjet" placeholder="ex: Rapport de coordination clashes structure / CVC — Réunion hebdomadaire"></textarea>
+      </div>
+
+      <hr class="form-sep">
+
+      <div class="form-group">
+        <label class="form-label">Topics à inclure</label>
+        <div class="scope-options">
+          <button class="scope-btn active" id="scopeAll" onclick="setScope('all')">Tous les topics</button>
+          <button class="scope-btn" id="scopeFiltered" onclick="setScope('filtered')">Topics filtrés actifs</button>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeReportModal()">Annuler</button>
+      <button class="btn-generate" onclick="generateReport()">⬇ Générer le rapport HTML</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── DATA CLASSES ─────────────────────────────────────────────────────────────
+
+class HeaderFile { constructor() { this.filename=null; this.date=null; this.ifcProject=null; this.ifcSpatialStructureElement=null; } }
+class Topic { constructor() { this.guid=null; this.title=null; this.referenceLink=null; } }
+class Comment { constructor() { this.guid=null; this.verbalStatus=null; this.status='Unknown'; this.date=null; this.author=null; this.text=null; this.topicGuid=null; } }
+class Markup { constructor() { this.header=[]; this.topic=null; this.comments=[]; } }
+class BCFNote { constructor() { this.markup=null; this.snapshot=null; } }
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+
+let allNotes = [];
+let currentBCFName = 'rapport-bcf';
+let currentFilter = 'all';
+let currentSearch = '';
+let currentSort = 'title';
+let selectedIndex = -1;
+
+// ─── XML PARSER ───────────────────────────────────────────────────────────────
+
+function getText(parent, tag) {
+  const el = parent.querySelector(tag);
+  return el ? el.textContent.trim() : null;
+}
+
+function parseMarkup(xmlStr) {
+  const doc = new DOMParser().parseFromString(xmlStr, 'application/xml');
+  const mu = new Markup();
+
+  doc.querySelectorAll('Header > File').forEach(n => {
+    const hf = new HeaderFile();
+    hf.filename = getText(n, 'Filename');
+    hf.date = getText(n, 'Date');
+    hf.ifcProject = n.getAttribute('IfcProject');
+    hf.ifcSpatialStructureElement = n.getAttribute('IfcSpatialStructureElement');
+    mu.header.push(hf);
+  });
+
+  const tn = doc.querySelector('Topic');
+  if (tn) {
+    mu.topic = new Topic();
+    mu.topic.guid = tn.getAttribute('Guid');
+    mu.topic.title = getText(tn, 'Title');
+    mu.topic.referenceLink = getText(tn, 'ReferenceLink');
+  }
+
+  doc.querySelectorAll('Comment').forEach(cn => {
+    const c = new Comment();
+    c.guid = cn.getAttribute('Guid');
+    c.verbalStatus = getText(cn, 'VerbalStatus');
+    c.status = getText(cn, 'Status') || 'Unknown';
+    c.date = getText(cn, 'Date');
+    c.author = getText(cn, 'Author');
+    c.text = getText(cn, 'Comment');
+    const tr = cn.querySelector('Topic');
+    c.topicGuid = tr ? tr.getAttribute('Guid') : null;
+    mu.comments.push(c);
+  });
+
+  return mu;
+}
+
+// ─── BCF READER ───────────────────────────────────────────────────────────────
+
+async function readBCF(file) {
+  const zip = await JSZip.loadAsync(file);
+  const folders = new Set();
+  zip.forEach((path) => {
+    const parts = path.split('/');
+    if (parts.length >= 2 && parts[1] === 'markup.bcf') folders.add(parts[0]);
+  });
+
+  const notes = [];
+  for (const folder of folders) {
+    const note = new BCFNote();
+    const mf = zip.file(`${folder}/markup.bcf`);
+    if (mf) note.markup = parseMarkup(await mf.async('string'));
+    const sf = zip.file(`${folder}/snapshot.png`);
+    if (sf) note.snapshot = `data:image/png;base64,${await sf.async('base64')}`;
+    notes.push(note);
+  }
+  return notes;
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+
+function getTopicStatus(note) {
+  const statuses = note.markup?.comments?.map(c => c.status) || [];
+  if (statuses.includes('Error')) return 'Error';
+  if (statuses.includes('Warning')) return 'Warning';
+  if (statuses.includes('Info')) return 'Info';
+  return 'Unknown';
+}
+
+function getFirstDate(note) {
+  return note.markup?.comments?.[0]?.date || '';
+}
+
+function formatDate(d) {
+  if (!d) return '—';
+  try {
+    return new Date(d).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' });
+  } catch { return d; }
+}
+
+function initials(author) {
+  if (!author) return '?';
+  const parts = author.trim().split(/\s+/);
+  return parts.slice(0, 2).map(p => p[0]).join('').toUpperCase();
+}
+
+function highlight(text, query) {
+  if (!text || !query) return text || '';
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text.replace(new RegExp(`(${escaped})`, 'gi'), '<mark>$1</mark>');
+}
+
+// ─── FILTERING & SORTING ──────────────────────────────────────────────────────
+
+function getFilteredSorted() {
+  let notes = [...allNotes];
+
+  // Filter status
+  if (currentFilter !== 'all') {
+    notes = notes.filter(n => getTopicStatus(n) === currentFilter);
+  }
+
+  // Search
+  if (currentSearch) {
+    const q = currentSearch.toLowerCase();
+    notes = notes.filter(n => {
+      const title = n.markup?.topic?.title?.toLowerCase() || '';
+      const comments = (n.markup?.comments || []).map(c => (c.text||'').toLowerCase() + (c.author||'').toLowerCase()).join(' ');
+      return title.includes(q) || comments.includes(q);
+    });
+  }
+
+  // Sort
+  notes.sort((a, b) => {
+    switch (currentSort) {
+      case 'title': return (a.markup?.topic?.title||'').localeCompare(b.markup?.topic?.title||'');
+      case 'title-desc': return (b.markup?.topic?.title||'').localeCompare(a.markup?.topic?.title||'');
+      case 'comments-desc': return (b.markup?.comments?.length||0) - (a.markup?.comments?.length||0);
+      case 'comments-asc': return (a.markup?.comments?.length||0) - (b.markup?.comments?.length||0);
+      case 'date-desc': return getFirstDate(b).localeCompare(getFirstDate(a));
+      case 'date-asc': return getFirstDate(a).localeCompare(getFirstDate(b));
+      default: return 0;
+    }
+  });
+
+  return notes;
+}
+
+// ─── RENDER LIST ──────────────────────────────────────────────────────────────
+
+function renderList() {
+  const panel = document.getElementById('listPanel');
+  const notes = getFilteredSorted();
+
+  if (!notes.length) {
+    panel.innerHTML = '<div class="no-results">Aucun topic trouvé</div>';
+    return;
+  }
+
+  panel.innerHTML = notes.map((note, i) => {
+    const status = getTopicStatus(note);
+    const title = highlight(note.markup?.topic?.title || '(sans titre)', currentSearch);
+    const guid = note.markup?.topic?.guid || '';
+    const nbComments = note.markup?.comments?.length || 0;
+    const date = formatDate(getFirstDate(note));
+
+    return `
+      <div class="topic-card" data-guid="${guid}" onclick="selectNote('${guid}')" >
+        <div class="card-header">
+          <div class="status-dot ${status}"></div>
+          <div class="card-title">${title}</div>
+          <span class="badge ${status}">${status}</span>
+        </div>
+        <div class="card-guid">${guid}</div>
+        <div class="card-meta">
+          <span>💬 ${nbComments} commentaire${nbComments>1?'s':''}</span>
+          <span>📅 ${date}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ─── RENDER DETAIL ────────────────────────────────────────────────────────────
+
+function selectNote(guid) {
+  const note = allNotes.find(n => n.markup?.topic?.guid === guid);
+  if (!note) return;
+
+  // Active card
+  document.querySelectorAll('.topic-card').forEach(c => c.classList.remove('active'));
+  const card = document.querySelector(`.topic-card[data-guid="${guid}"]`);
+  if (card) card.classList.add('active');
+
+  const status = getTopicStatus(note);
+  const topic = note.markup?.topic;
+  const comments = note.markup?.comments || [];
+  const header = note.markup?.header || [];
+
+  const detail = document.getElementById('detailPanel');
+  detail.innerHTML = `
+    <div class="detail-hero">
+      <div class="detail-status-row">
+        <span class="badge ${status}">${status}</span>
+        ${topic?.referenceLink ? `<a href="${topic.referenceLink}" target="_blank" style="color:var(--accent);font-size:0.75rem;text-decoration:none;">🔗 Lien référence</a>` : ''}
+      </div>
+      <div class="detail-title">${topic?.title || '(sans titre)'}</div>
+      <div class="detail-guid">${topic?.guid || '—'}</div>
+    </div>
+    <div class="detail-body">
+      ${note.snapshot ? `
+        <div class="detail-section full">
+          <div class="section-label">Snapshot</div>
+          <div class="snapshot-wrap">
+            <img src="${note.snapshot}" alt="Snapshot" />
+          </div>
+        </div>
+      ` : ''}
+
+      <div class="detail-section full">
+        <div class="section-label">Commentaires (${comments.length})</div>
+        ${comments.length === 0 ? '<div style="color:var(--muted);font-size:0.82rem;">Aucun commentaire</div>' : ''}
+        ${comments.map(c => `
+          <div class="comment-item">
+            <div class="comment-avatar">${initials(c.author)}</div>
+            <div class="comment-content">
+              <div class="comment-meta">
+                <span class="comment-author">${highlight(c.author || 'Inconnu', currentSearch)}</span>
+                <span class="comment-date">${formatDate(c.date)}</span>
+                <span class="badge ${c.status}">${c.status}</span>
+              </div>
+              <div class="comment-text">${highlight(c.text || '(vide)', currentSearch)}</div>
+              ${c.verbalStatus ? `<div class="verbal-status">💬 ${c.verbalStatus}</div>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      ${header.length > 0 ? `
+        <div class="detail-section full">
+          <div class="section-label">Fichiers liés</div>
+          ${header.map(f => `
+            <div class="file-item">
+              <span class="file-icon">📄</span>
+              <span class="file-name">${f.filename || '—'}</span>
+              <span class="file-date">${formatDate(f.date)}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
+
+  detail.scrollTop = 0;
+}
+
+// ─── COUNTS ───────────────────────────────────────────────────────────────────
+
+function updateCounts() {
+  const counts = { all: allNotes.length, Error: 0, Warning: 0, Info: 0, Unknown: 0 };
+  allNotes.forEach(n => { counts[getTopicStatus(n)]++; });
+  Object.entries(counts).forEach(([k, v]) => {
+    const el = document.getElementById(`cnt-${k}`);
+    if (el) el.textContent = v;
+  });
+
+  document.getElementById('statTopics').textContent = allNotes.length;
+  const totalComments = allNotes.reduce((s, n) => s + (n.markup?.comments?.length||0), 0);
+  document.getElementById('statComments').textContent = totalComments;
+  document.getElementById('statErrors').textContent = counts.Error;
+  document.getElementById('statWarnings').textContent = counts.Warning;
+}
+
+// ─── APP INIT ─────────────────────────────────────────────────────────────────
+
+async function loadFile(file) {
+  try {
+    allNotes = await readBCF(file);
+    currentBCFName = file.name.replace(/\.(bcf|bcfzip)$/i, '');
+    currentFilter = 'all';
+    currentSearch = '';
+    currentSort = 'title';
+    selectedIndex = -1;
+
+    updateCounts();
+    renderList();
+
+    document.getElementById('dropZone').classList.add('hidden');
+    document.getElementById('toolbar').classList.add('visible');
+    document.getElementById('main').classList.add('visible');
+    document.getElementById('statsBar').style.display = 'flex';
+    document.getElementById('btnNewFile').style.display = 'flex';
+    document.getElementById('btnReport').style.display = 'flex';
+
+    // Pre-fill modal
+    document.getElementById('rProjet').value = currentBCFName;
+    document.getElementById('rDate').value = new Date().toISOString().slice(0,10);
+  } catch (e) {
+    alert('Erreur lors de la lecture du fichier BCF : ' + e.message);
+    console.error(e);
+  }
+}
+
+function resetApp() {
+  allNotes = [];
+  document.getElementById('dropZone').classList.remove('hidden');
+  document.getElementById('toolbar').classList.remove('visible');
+  document.getElementById('main').classList.remove('visible');
+  document.getElementById('statsBar').style.display = 'none';
+  document.getElementById('btnNewFile').style.display = 'none';
+  document.getElementById('btnReport').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+}
+
+// ─── EVENTS ───────────────────────────────────────────────────────────────────
+
+document.getElementById('fileInput').addEventListener('change', e => {
+  if (e.target.files[0]) loadFile(e.target.files[0]);
+});
+
+// Drag & drop
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+
+// Search
+document.getElementById('searchInput').addEventListener('input', e => {
+  currentSearch = e.target.value.trim();
+  renderList();
+});
+
+// Filter buttons
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFilter = btn.dataset.status;
+    renderList();
+  });
+});
+
+// Sort
+document.getElementById('sortSelect').addEventListener('change', e => {
+  currentSort = e.target.value;
+  renderList();
+});
+
+// ─── REPORT MODAL ─────────────────────────────────────────────────────────────
+
+let reportScope = 'all';
+
+function openReportModal() {
+  document.getElementById('reportModal').classList.add('open');
+}
+function closeReportModal() {
+  document.getElementById('reportModal').classList.remove('open');
+}
+function setScope(s) {
+  reportScope = s;
+  document.getElementById('scopeAll').classList.toggle('active', s === 'all');
+  document.getElementById('scopeFiltered').classList.toggle('active', s === 'filtered');
+}
+
+document.getElementById('reportModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('reportModal')) closeReportModal();
+});
+
+// ─── REPORT GENERATOR ─────────────────────────────────────────────────────────
+
+function generateReport() {
+  const projet   = document.getElementById('rProjet').value || 'Projet BCF';
+  const emetteur = document.getElementById('rEmetteur').value || '—';
+  const numero   = document.getElementById('rNumero').value || '—';
+  const indice   = document.getElementById('rIndice').value || '—';
+  const dateRap  = document.getElementById('rDate').value
+    ? new Date(document.getElementById('rDate').value).toLocaleDateString('fr-FR', {day:'2-digit',month:'long',year:'numeric'})
+    : new Date().toLocaleDateString('fr-FR', {day:'2-digit',month:'long',year:'numeric'});
+  const objet    = document.getElementById('rObjet').value || '';
+
+  const notes = reportScope === 'filtered' ? getFilteredSorted() : [...allNotes];
+
+  // Stats
+  const counts = { Error:0, Warning:0, Info:0, Unknown:0 };
+  notes.forEach(n => counts[getTopicStatus(n)]++);
+  const totalComments = notes.reduce((s,n) => s+(n.markup?.comments?.length||0), 0);
+
+  // Status colors
+  const statusColor = { Error:'#ef4444', Warning:'#eab308', Info:'#3b82f6', Unknown:'#6b7280' };
+  const statusBg    = { Error:'#fef2f2', Warning:'#fefce8', Info:'#eff6ff', Unknown:'#f9fafb' };
+  const statusBorder= { Error:'#fca5a5', Warning:'#fde047', Info:'#93c5fd', Unknown:'#d1d5db' };
+
+  function fmtDate(d) {
+    if (!d) return '—';
+    try { return new Date(d).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}); }
+    catch { return d; }
+  }
+  function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // ── TOPIC DETAILS HTML — 3 par page, layout 2 colonnes ──
+  const topicCards = notes.map((note, idx) => {
+    const topic    = note.markup?.topic;
+    const comments = note.markup?.comments || [];
+    const header   = note.markup?.header || [];
+    const status   = getTopicStatus(note);
+    const sc       = statusColor[status];
+    const sb       = statusBg[status];
+    const sbord    = statusBorder[status];
+
+    const commentsHTML = comments.map(c => {
+      const cs = statusColor[c.status] || '#6b7280';
+      return `
+        <div style="padding:6px 0;border-bottom:1px solid #f0f0f0;display:flex;flex-direction:column;gap:2px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-weight:600;font-size:0.72rem;color:#111;">${esc(c.author||'—')}</span>
+            <span style="font-size:0.62rem;color:#9ca3af;">${fmtDate(c.date)}</span>
+            <span style="display:inline-block;padding:1px 6px;border-radius:6px;font-size:0.58rem;font-weight:700;letter-spacing:0.04em;color:${cs};background:${statusBg[c.status]||'#f9fafb'};border:1px solid ${statusBorder[c.status]||'#d1d5db'};">${esc(c.status)}</span>
+          </div>
+          <div style="font-size:0.75rem;color:#374151;line-height:1.45;">${esc(c.text||'—')}</div>
+          ${c.verbalStatus ? `<div style="font-size:0.65rem;color:#9ca3af;font-style:italic;">${esc(c.verbalStatus)}</div>`:''}
+        </div>`;
+    }).join('');
+
+    const filesHTML = header.length > 0
+      ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid #f0f0f0;">
+           ${header.map(f=>`<div style="font-size:0.65rem;font-family:monospace;color:#9ca3af;">📄 ${esc(f.filename||'—')}</div>`).join('')}
+         </div>`
+      : '';
+
+    // Zone image (gauche)
+    const imageZone = note.snapshot
+      ? `<img src="${note.snapshot}" alt="Snapshot" style="width:100%;height:100%;object-fit:cover;display:block;" />`
+      : `<div style="width:100%;height:100%;min-height:120px;display:flex;align-items:center;justify-content:center;background:#f9fafb;color:#d1d5db;font-size:0.7rem;font-family:monospace;">PAS DE SNAPSHOT</div>`;
+
+    return `
+      <div style="margin-bottom:14px;border:1px solid ${sbord};border-radius:6px;overflow:hidden;">
+
+        <!-- EN-TÊTE TOPIC -->
+        <div style="padding:8px 14px;background:${sb};border-bottom:1px solid ${sbord};display:flex;align-items:center;gap:10px;">
+          <div style="width:24px;height:24px;border-radius:3px;background:${sc};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.65rem;flex-shrink:0;font-family:monospace;">${String(idx+1).padStart(2,'0')}</div>
+          <span style="padding:1px 7px;border-radius:6px;font-size:0.58rem;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:${sc};background:#fff;border:1px solid ${sbord};flex-shrink:0;">${esc(status)}</span>
+          <div style="font-size:0.82rem;font-weight:700;color:#111;letter-spacing:-0.01em;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(topic?.title||'(sans titre)')}</div>
+          <span style="font-family:monospace;font-size:0.6rem;color:#9ca3af;flex-shrink:0;">💬 ${comments.length}</span>
+        </div>
+
+        <!-- CORPS : IMAGE GAUCHE + COMMENTAIRES DROITE -->
+        <div style="display:flex;background:#fff;min-height:130px;">
+
+          <!-- ZONE IMAGE -->
+          <div style="width:42%;flex-shrink:0;border-right:1px solid #e5e7eb;overflow:hidden;position:relative;">
+            ${imageZone}
+          </div>
+
+          <!-- ZONE COMMENTAIRES -->
+          <div style="flex:1;padding:10px 14px;overflow:hidden;">
+            <div style="font-family:monospace;font-size:0.58rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#f97316;margin-bottom:6px;">COMMENTAIRES</div>
+            ${comments.length > 0
+              ? commentsHTML
+              : `<div style="font-size:0.72rem;color:#9ca3af;margin-top:4px;">Aucun commentaire</div>`
+            }
+            ${filesHTML}
+          </div>
+
+        </div>
+      </div>`;
+  });
+
+  // Grouper par 3 avec saut de page entre chaque groupe
+  const topicsHTML = topicCards.reduce((acc, card, i) => {
+    const groupIdx = Math.floor(i / 3);
+    if (!acc[groupIdx]) acc[groupIdx] = [];
+    acc[groupIdx].push(card);
+    return acc;
+  }, []).map((group, gi) => `
+    <div style="${gi > 0 ? 'page-break-before:always;padding-top:44px;' : ''}">
+      ${gi > 0 ? `<div style="display:flex;align-items:center;gap:16px;margin-bottom:32px;"><div style="font-size:1.1rem;font-weight:700;">Détail des topics (suite)</div><div style="flex:1;height:1px;background:#d1d5db;"></div></div>` : ''}
+      ${group.join('')}
+    </div>
+  `).join('');
+
+  // ── DONUT CHART (SVG) ──
+  const total = notes.length || 1;
+  const donutData = [
+    { label:'Error',   value:counts.Error,   color:'#ef4444' },
+    { label:'Warning', value:counts.Warning,  color:'#eab308' },
+    { label:'Info',    value:counts.Info,     color:'#3b82f6' },
+    { label:'Unknown', value:counts.Unknown,  color:'#d1d5db' },
+  ].filter(d => d.value > 0);
+
+  let donutSVG = '';
+  if (donutData.length > 0) {
+    const r = 52, cx = 60, cy = 60, stroke = 20;
+    const circumference = 2 * Math.PI * r;
+    let offset = 0;
+    const arcs = donutData.map(d => {
+      const pct = d.value / total;
+      const dash = pct * circumference;
+      const arc = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${d.color}" stroke-width="${stroke}" stroke-dasharray="${dash} ${circumference - dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})" />`;
+      offset += dash;
+      return arc;
+    }).join('');
+    donutSVG = `<svg width="120" height="120" viewBox="0 0 120 120">${arcs}<circle cx="${cx}" cy="${cy}" r="${r - stroke/2 - 4}" fill="white"/><text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="800" fill="#111">${total}</text><text x="${cx}" y="${cy+16}" text-anchor="middle" font-size="7" fill="#9ca3af" font-family="monospace">TOPICS</text></svg>`;
+  }
+
+  // ── FULL REPORT HTML ──
+  const html = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rapport BCF — ${esc(projet)}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'IBM Plex Sans', sans-serif; background: #f3f4f6; color: #111; font-size: 0.875rem; }
+  @media print {
+    body { background: white; }
+    .no-print { display: none !important; }
+    .page-break { page-break-before: always; }
+  }
+</style>
+</head>
+<body>
+
+<!-- COVER PAGE -->
+<div style="min-height:100vh;display:flex;flex-direction:column;background:linear-gradient(145deg,#0d0f14 60%,#1a1f2e);color:#fff;padding:44px 52px;">
+
+  <div style="display:flex;align-items:center;gap:16px;margin-bottom:auto;">
+    <div style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:0.9rem;letter-spacing:0.15em;color:#f97316;text-transform:uppercase;">BCF · Reader</div>
+    <div style="flex:1;height:1px;background:rgba(255,255,255,0.1);"></div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:#64748b;">${esc(numero)} — Ind. ${esc(indice)}</div>
+  </div>
+
+  <div style="padding:80px 0 60px;">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;letter-spacing:0.15em;text-transform:uppercase;color:#f97316;margin-bottom:20px;">Rapport de coordination BCF</div>
+    <div style="font-size:2.2rem;font-weight:700;line-height:1.2;max-width:700px;margin-bottom:18px;letter-spacing:-0.02em;">${esc(projet)}</div>
+    ${objet ? `<div style="font-size:1rem;color:#94a3b8;max-width:600px;line-height:1.6;">${esc(objet)}</div>` : ''}
+  </div>
+
+  <!-- Stats bar on cover -->
+  <div style="display:flex;gap:2px;margin-bottom:40px;border-radius:8px;overflow:hidden;">
+    ${counts.Error>0?`<div style="flex:${counts.Error};background:#ef4444;padding:10px 16px;"><div style="font-size:1.4rem;font-weight:800;">${counts.Error}</div><div style="font-size:0.65rem;opacity:0.8;font-family:monospace;letter-spacing:0.08em;">ERROR</div></div>`:''}
+    ${counts.Warning>0?`<div style="flex:${counts.Warning};background:#eab308;padding:10px 16px;"><div style="font-size:1.4rem;font-weight:800;color:#000;">${counts.Warning}</div><div style="font-size:0.65rem;opacity:0.7;font-family:monospace;letter-spacing:0.08em;color:#000;">WARNING</div></div>`:''}
+    ${counts.Info>0?`<div style="flex:${counts.Info};background:#3b82f6;padding:10px 16px;"><div style="font-size:1.4rem;font-weight:800;">${counts.Info}</div><div style="font-size:0.65rem;opacity:0.8;font-family:monospace;letter-spacing:0.08em;">INFO</div></div>`:''}
+    ${counts.Unknown>0?`<div style="flex:${counts.Unknown};background:#374151;padding:10px 16px;"><div style="font-size:1.4rem;font-weight:800;">${counts.Unknown}</div><div style="font-size:0.65rem;opacity:0.8;font-family:monospace;letter-spacing:0.08em;">UNKNOWN</div></div>`:''}
+  </div>
+
+  <!-- Meta table -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(255,255,255,0.08);border-radius:8px;overflow:hidden;">
+    ${[['Émetteur',emetteur],['N° rapport',numero],['Indice',indice],['Date',dateRap]].map(([l,v])=>`
+    <div style="padding:16px 20px;background:rgba(255,255,255,0.04);">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;margin-bottom:6px;">${l}</div>
+      <div style="font-weight:600;font-size:0.88rem;color:#e2e8f0;">${esc(v)}</div>
+    </div>`).join('')}
+  </div>
+
+</div>
+
+<!-- SUMMARY PAGE -->
+<div style="background:#fff;padding:44px 52px;page-break-before:always;">
+
+  <div style="display:flex;align-items:center;gap:16px;margin-bottom:40px;padding-bottom:20px;border-bottom:2px solid #f3f4f6;">
+    <div style="font-size:1.4rem;font-weight:800;">Tableau récapitulatif</div>
+    <div style="flex:1;height:1px;background:#e5e7eb;"></div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:#9ca3af;">${notes.length} topics · ${totalComments} commentaires</div>
+  </div>
+
+  <div style="display:flex;gap:40px;align-items:flex-start;">
+
+    <!-- Donut -->
+    <div style="text-align:center;flex-shrink:0;">
+      ${donutSVG}
+      <div style="margin-top:12px;">
+        ${donutData.map(d=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:0.75rem;font-family:monospace;">
+          <span style="width:10px;height:10px;border-radius:50%;background:${d.color};display:inline-block;"></span>
+          <span style="color:#6b7280;">${d.label}</span>
+          <span style="font-weight:700;margin-left:auto;">${d.value}</span>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div style="flex:1;overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+        <thead>
+          <tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">
+            <th style="padding:10px 14px;text-align:left;font-family:monospace;font-size:0.65rem;letter-spacing:0.08em;color:#6b7280;font-weight:700;">#</th>
+            <th style="padding:10px 14px;text-align:left;font-family:monospace;font-size:0.65rem;letter-spacing:0.08em;color:#6b7280;font-weight:700;">STATUT</th>
+            <th style="padding:10px 14px;text-align:left;font-family:monospace;font-size:0.65rem;letter-spacing:0.08em;color:#6b7280;font-weight:700;">TITRE DU TOPIC</th>
+            <th style="padding:10px 14px;text-align:center;font-family:monospace;font-size:0.65rem;letter-spacing:0.08em;color:#6b7280;font-weight:700;">COMM.</th>
+            <th style="padding:10px 14px;text-align:left;font-family:monospace;font-size:0.65rem;letter-spacing:0.08em;color:#6b7280;font-weight:700;">DATE</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${notes.map((note,i) => {
+            const st = getTopicStatus(note);
+            const sc2 = statusColor[st];
+            return `<tr style="border-bottom:1px solid #f3f4f6;${i%2===0?'background:#fff;':'background:#fafafa;'}">
+              <td style="padding:9px 14px;font-family:monospace;font-size:0.72rem;color:#9ca3af;font-weight:600;">${String(i+1).padStart(2,'0')}</td>
+              <td style="padding:9px 14px;">
+                <span style="padding:2px 8px;border-radius:10px;font-size:0.62rem;font-weight:800;letter-spacing:0.05em;color:${sc2};background:${statusBg[st]};border:1px solid ${statusBorder[st]};">${esc(st)}</span>
+              </td>
+              <td style="padding:9px 14px;font-weight:600;color:#111;max-width:300px;">${esc(note.markup?.topic?.title||'—')}</td>
+              <td style="padding:9px 14px;text-align:center;font-family:monospace;font-size:0.78rem;color:#374151;font-weight:600;">${note.markup?.comments?.length||0}</td>
+              <td style="padding:9px 14px;font-family:monospace;font-size:0.72rem;color:#9ca3af;">${fmtDate(getFirstDate(note))}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- DETAILS -->
+<div style="background:#f3f4f6;padding:44px 52px;">
+  <div style="display:flex;align-items:center;gap:16px;margin-bottom:40px;">
+    <div style="font-size:1.4rem;font-weight:800;">Détail des topics</div>
+    <div style="flex:1;height:1px;background:#d1d5db;"></div>
+  </div>
+  ${topicsHTML}
+</div>
+
+<!-- FOOTER -->
+<div style="background:#0d0f14;color:#64748b;padding:24px 60px;display:flex;justify-content:space-between;align-items:center;font-family:'JetBrains Mono',monospace;font-size:0.68rem;">
+  <span>BCF Reader — ${esc(projet)}</span>
+  <span>Rapport ${esc(numero)} · Ind. ${esc(indice)} · ${esc(dateRap)}</span>
+  <span>Généré par BMS Project</span>
+</div>
+
+</body>
+</html>`;
+
+  // Download
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `rapport-bcf-${currentBCFName}-${document.getElementById('rDate').value||'export'}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+  closeReportModal();
+}
+</script>
+</body>
+</html>
