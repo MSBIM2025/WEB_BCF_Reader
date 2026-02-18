@@ -104,6 +104,9 @@ BCF (BIM Collaboration Format) version 2.1 — structure ZIP contenant :
 
 **BMS Project** — Développement et management BIM
 
+## A tester 
+https://msbim2025.github.io/WEB_BCF_Reader/
+
 ---
 
 ## 📄 Licence
