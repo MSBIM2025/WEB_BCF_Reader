@@ -35,12 +35,11 @@ GitHub Pages sert uniquement les fichiers statiques (HTML/CSS/JS). Il n'existe a
 - 🖼️ Snapshots affichées dans le panneau de détail (réduit à 25% pour la lisibilité)
 - ☑️ Sélection multi-topics via Ctrl+clic — barre flottante avec compteur et accès rapide à l'export
 - 📄 Export rapport HTML autonome téléchargeable, comprenant :
-
-  Page de garde (projet, émetteur, n°, indice, date, objet)
-  Tableau récapitulatif avec donut SVG des statuts et liens d'ancrage vers chaque topic
-  Détail des topics — layout image + commentaires côte à côte
-  3 topics par page, sauts de page automatiques pour impression / PDF
-  3 scopes au choix : tous les topics / topics filtrés actifs / sélection manuelle
+- Page de garde (projet, émetteur, n°, indice, date, objet)
+- Tableau récapitulatif avec donut SVG des statuts et liens d'ancrage vers chaque topic
+- Détail des topics — layout image + commentaires côte à côte
+- 3 topics par page, sauts de page automatiques pour impression / PDF
+- 3 scopes au choix : tous les topics / topics filtrés actifs / sélection manuelle
 
 ---
 
