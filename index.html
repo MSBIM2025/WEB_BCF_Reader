@@ -605,6 +605,112 @@
     padding: 0 1px;
   }
 
+  /* ── CARD SELECTED ── */
+  .topic-card.selected {
+    background: rgba(249,115,22,0.07);
+  }
+  .topic-card.selected::before {
+    background: var(--accent);
+  }
+  .topic-card.selected .card-check {
+    opacity: 1;
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .card-check {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    flex-shrink: 0;
+    margin-top: 3px;
+    opacity: 0;
+    transition: all 0.15s;
+  }
+  .topic-card:hover .card-check { opacity: 0.5; }
+  .topic-card.selected .card-check { opacity: 1; }
+
+  /* ── SELECTION BAR ── */
+  #selectionBar {
+    position: fixed;
+    bottom: -80px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 200;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    transition: bottom 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    white-space: nowrap;
+  }
+  #selectionBar.visible { bottom: 24px; }
+
+  .sel-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+  .sel-count b { color: var(--accent); }
+
+  .sel-divider { width: 1px; height: 20px; background: var(--border); }
+
+  .btn-sel-clear {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.72rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: color 0.15s;
+  }
+  .btn-sel-clear:hover { color: var(--text); }
+
+  .btn-sel-all {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 5px 12px;
+    border-radius: 6px;
+    transition: all 0.15s;
+  }
+  .btn-sel-all:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-print {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 18px;
+    background: linear-gradient(135deg, #f97316, #fb923c);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 2px 12px rgba(249,115,22,0.35);
+  }
+  .btn-print:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(249,115,22,0.45); }
+
   /* ── REPORT BUTTON ── */
   .btn-report {
     padding: 6px 16px;
@@ -797,6 +903,16 @@
   </div>
 </div>
 
+<!-- SELECTION BAR -->
+<div id="selectionBar">
+  <div class="sel-count"><b id="selCount">0</b> topic(s) sélectionné(s)</div>
+  <div class="sel-divider"></div>
+  <button class="btn-sel-all" onclick="selectAll()">Tout sélectionner</button>
+  <button class="btn-sel-clear" onclick="clearSelection()">✕ Désélectionner</button>
+  <div class="sel-divider"></div>
+  <button class="btn-print" onclick="openReportFromSelection()">⬇ Exporter la sélection</button>
+</div>
+
 <!-- REPORT MODAL -->
 <div class="modal-overlay" id="reportModal">
   <div class="modal">
@@ -841,7 +957,8 @@
         <label class="form-label">Topics à inclure</label>
         <div class="scope-options">
           <button class="scope-btn active" id="scopeAll" onclick="setScope('all')">Tous les topics</button>
-          <button class="scope-btn" id="scopeFiltered" onclick="setScope('filtered')">Topics filtrés actifs</button>
+          <button class="scope-btn" id="scopeFiltered" onclick="setScope('filtered')">Topics filtrés</button>
+          <button class="scope-btn" id="scopeSelection" onclick="setScope('selection')">Sélection (<span id="scopeSelCount">0</span>)</button>
         </div>
       </div>
 
@@ -870,6 +987,7 @@ let currentFilter = 'all';
 let currentSearch = '';
 let currentSort = 'title';
 let selectedIndex = -1;
+let selectedGuids = new Set();
 
 // ─── XML PARSER ───────────────────────────────────────────────────────────────
 
@@ -1017,16 +1135,18 @@ function renderList() {
     return;
   }
 
-  panel.innerHTML = notes.map((note, i) => {
+  panel.innerHTML = notes.map((note) => {
     const status = getTopicStatus(note);
     const title = highlight(note.markup?.topic?.title || '(sans titre)', currentSearch);
     const guid = note.markup?.topic?.guid || '';
     const nbComments = note.markup?.comments?.length || 0;
     const date = formatDate(getFirstDate(note));
+    const isSelected = selectedGuids.has(guid);
 
     return `
-      <div class="topic-card" data-guid="${guid}" onclick="selectNote('${guid}')" >
+      <div class="topic-card${isSelected ? ' selected' : ''}" data-guid="${guid}" onclick="handleCardClick(event, '${guid}')">
         <div class="card-header">
+          <div class="card-check">✓</div>
           <div class="status-dot ${status}"></div>
           <div class="card-title">${title}</div>
           <span class="badge ${status}">${status}</span>
@@ -1141,6 +1261,8 @@ async function loadFile(file) {
     currentSearch = '';
     currentSort = 'title';
     selectedIndex = -1;
+    selectedGuids.clear();
+    updateSelectionBar();
 
     updateCounts();
     renderList();
@@ -1211,20 +1333,66 @@ document.getElementById('sortSelect').addEventListener('change', e => {
   renderList();
 });
 
+// ─── SELECTION ────────────────────────────────────────────────────────────────
+
+function handleCardClick(e, guid) {
+  if (e.ctrlKey || e.metaKey) {
+    // Ctrl+clic → toggle sélection
+    if (selectedGuids.has(guid)) {
+      selectedGuids.delete(guid);
+    } else {
+      selectedGuids.add(guid);
+    }
+    updateSelectionBar();
+    renderList();
+  } else {
+    // Clic normal → ouvrir détail
+    selectNote(guid);
+  }
+}
+
+function updateSelectionBar() {
+  const bar = document.getElementById('selectionBar');
+  const count = selectedGuids.size;
+  document.getElementById('selCount').textContent = count;
+  bar.classList.toggle('visible', count > 0);
+}
+
+function clearSelection() {
+  selectedGuids.clear();
+  updateSelectionBar();
+  renderList();
+}
+
+function selectAll() {
+  getFilteredSorted().forEach(n => {
+    const guid = n.markup?.topic?.guid;
+    if (guid) selectedGuids.add(guid);
+  });
+  updateSelectionBar();
+  renderList();
+}
+
 // ─── REPORT MODAL ─────────────────────────────────────────────────────────────
 
 let reportScope = 'all';
 
 function openReportModal() {
+  document.getElementById('scopeSelCount').textContent = selectedGuids.size;
   document.getElementById('reportModal').classList.add('open');
 }
 function closeReportModal() {
   document.getElementById('reportModal').classList.remove('open');
 }
+function openReportFromSelection() {
+  setScope('selection');
+  openReportModal();
+}
 function setScope(s) {
   reportScope = s;
   document.getElementById('scopeAll').classList.toggle('active', s === 'all');
   document.getElementById('scopeFiltered').classList.toggle('active', s === 'filtered');
+  document.getElementById('scopeSelection').classList.toggle('active', s === 'selection');
 }
 
 document.getElementById('reportModal').addEventListener('click', e => {
@@ -1243,7 +1411,11 @@ function generateReport() {
     : new Date().toLocaleDateString('fr-FR', {day:'2-digit',month:'long',year:'numeric'});
   const objet    = document.getElementById('rObjet').value || '';
 
-  const notes = reportScope === 'filtered' ? getFilteredSorted() : [...allNotes];
+  const notes = reportScope === 'filtered'
+    ? getFilteredSorted()
+    : reportScope === 'selection'
+      ? allNotes.filter(n => selectedGuids.has(n.markup?.topic?.guid))
+      : [...allNotes];
 
   // Stats
   const counts = { Error:0, Warning:0, Info:0, Unknown:0 };
@@ -1298,7 +1470,7 @@ function generateReport() {
       : `<div style="width:100%;height:100%;min-height:120px;display:flex;align-items:center;justify-content:center;background:#f9fafb;color:#d1d5db;font-size:0.7rem;font-family:monospace;">PAS DE SNAPSHOT</div>`;
 
     return `
-      <div style="margin-bottom:14px;border:1px solid ${sbord};border-radius:6px;overflow:hidden;">
+      <div id="topic-${esc(topic?.guid||idx)}" style="margin-bottom:14px;border:1px solid ${sbord};border-radius:6px;overflow:hidden;">
 
         <!-- EN-TÊTE TOPIC -->
         <div style="padding:8px 14px;background:${sb};border-bottom:1px solid ${sbord};display:flex;align-items:center;gap:10px;">
@@ -1457,15 +1629,18 @@ function generateReport() {
           </tr>
         </thead>
         <tbody>
-          ${notes.map((note,i) => {
+        ${notes.map((note,i) => {
             const st = getTopicStatus(note);
             const sc2 = statusColor[st];
+            const guid = note.markup?.topic?.guid || i;
             return `<tr style="border-bottom:1px solid #f3f4f6;${i%2===0?'background:#fff;':'background:#fafafa;'}">
               <td style="padding:9px 14px;font-family:monospace;font-size:0.72rem;color:#9ca3af;font-weight:600;">${String(i+1).padStart(2,'0')}</td>
               <td style="padding:9px 14px;">
                 <span style="padding:2px 8px;border-radius:10px;font-size:0.62rem;font-weight:800;letter-spacing:0.05em;color:${sc2};background:${statusBg[st]};border:1px solid ${statusBorder[st]};">${esc(st)}</span>
               </td>
-              <td style="padding:9px 14px;font-weight:600;color:#111;max-width:300px;">${esc(note.markup?.topic?.title||'—')}</td>
+              <td style="padding:9px 14px;font-weight:600;color:#111;max-width:300px;">
+                <a href="#topic-${esc(guid)}" style="color:#111;text-decoration:none;border-bottom:1px solid #e5e7eb;">${esc(note.markup?.topic?.title||'—')}</a>
+              </td>
               <td style="padding:9px 14px;text-align:center;font-family:monospace;font-size:0.78rem;color:#374151;font-weight:600;">${note.markup?.comments?.length||0}</td>
               <td style="padding:9px 14px;font-family:monospace;font-size:0.72rem;color:#9ca3af;">${fmtDate(getFirstDate(note))}</td>
             </tr>`;
